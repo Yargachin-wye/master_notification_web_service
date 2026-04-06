@@ -1,45 +1,108 @@
+const express = require('express');
+const http = require('http');
 const WebSocket = require('ws');
-const port = process.env.PORT || 3000;   // Render сам подставит PORT
 
-const wss = new WebSocket.Server({
-    port: port,
-    path: '/'                    // можно изменить на '/ws', если хочешь
-});
+const app = express();
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
 
-console.log(`WebSocket сервер запущен на порту ${port}`);
+const clients = new Set();
 
-let clients = new Set();
-
-// Когда ESP32 или любой клиент подключается
+// ==================== WebSocket ====================
 wss.on('connection', (ws) => {
-    console.log('Клиент подключился (ESP32)');
+    console.log('ESP32 или клиент подключился');
     clients.add(ws);
 
-    ws.send('Подключение к серверу успешно! Готов принимать уведомления.');
+    ws.send('✅ Подключено к серверу успешно!');
 
-    // Если ESP32 что-то отправляет
-    ws.on('message', (message) => {
-        console.log('Получено от клиента:', message.toString());
+    ws.on('message', (msg) => {
+        console.log('Сообщение от клиента:', msg.toString());
     });
 
     ws.on('close', () => {
-        console.log('Клиент отключился');
         clients.delete(ws);
+        console.log('Клиент отключился');
     });
 });
 
-// Функция, которую ты будешь вызывать, чтобы отправить уведомление на ESP32
-function sendNotification(message) {
+// ==================== HTTP-эндпоинты (для кнопки) ====================
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Простая страница с кнопкой
+app.get('/', (req, res) => {
+    res.send(`
+    <!DOCTYPE html>
+    <html lang="ru">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Уведомления для ESP32</title>
+      <style>
+        body { font-family: Arial; text-align: center; padding: 50px; background: #1e1e1e; color: #0f0; }
+        button { padding: 15px 30px; font-size: 18px; margin: 10px; cursor: pointer; }
+        input { padding: 10px; width: 300px; font-size: 16px; margin: 10px; }
+        .log { margin-top: 30px; text-align: left; max-width: 600px; margin-left: auto; margin-right: auto; color: #aaa; }
+      </style>
+    </head>
+    <body>
+      <h1>Отправка уведомления на ESP32</h1>
+      
+      <input type="text" id="msg" placeholder="Введите текст уведомления" value="Привет! Кто-то нажал кнопку">
+      <br>
+      <button onclick="sendLike()">❤️ Отправить "Лайк"</button>
+      <button onclick="sendCustom()">Отправить своё сообщение</button>
+      <button onclick="sendHello()">Отправить "Привет"</button>
+
+      <div class="log" id="log"></div>
+
+      <script>
+        function sendNotification(text) {
+          fetch('/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: text })
+          })
+          .then(r => r.text())
+          .then(data => {
+            document.getElementById('log').innerHTML += '<br>✓ ' + data;
+          });
+        }
+
+        function sendLike() { sendNotification('❤️ Лайк получен!'); }
+        function sendHello() { sendNotification('👋 Привет от сервера!'); }
+        function sendCustom() {
+          const text = document.getElementById('msg').value || 'Пустое сообщение';
+          sendNotification(text);
+        }
+      </script>
+    </body>
+  </html>
+  `);
+});
+
+// Эндпоинт для отправки уведомления
+app.post('/notify', (req, res) => {
+    const { message } = req.body;
+
+    if (!message) {
+        return res.status(400).send('Сообщение пустое');
+    }
+
+    let sentCount = 0;
     clients.forEach(client => {
         if (client.readyState === WebSocket.OPEN) {
             client.send(message);
+            sentCount++;
         }
     });
-}
 
-// Пример: отправляем тестовое сообщение каждые 30 секунд (можно удалить)
-setInterval(() => {
-    sendNotification('Тестовое уведомление от сервера');
-}, 30000);
+    console.log(`Уведомление отправлено ${sentCount} клиентам: ${message}`);
+    res.send(`Уведомление "${message}" отправлено ${sentCount} устройствам`);
+});
 
-console.log('Сервер готов. Отправляй уведомления через функцию sendNotification()');
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`Сервер запущен на порту ${PORT}`);
+    console.log(`Открой в браузере: http://localhost:${PORT}`);
+});
