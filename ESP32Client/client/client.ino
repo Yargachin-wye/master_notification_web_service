@@ -23,17 +23,28 @@ WebSocketsClient webSocket;
 // Экран
 Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
 
+const int artSize = 16;
+
 // ==================== СЕРДЕЧКИ (TikTok-style) ====================
-const uint8_t heartBitmap[8] PROGMEM = {
-  0b00011000,
-  0b00011000,
-  0b11111111,
-  0b11111111,
-  0b00011000,
-  0b00011000,
-  0b00011000,
-  0b00011000
+const uint8_t artBitmap[] PROGMEM = {
+  0b00001100, 0b00110000,
+  0b00011110, 0b01111000,
+  0b00111111, 0b11111100,
+  0b01111111, 0b11111110,
+  0b01111111, 0b11111110,
+  0b01111111, 0b11111110,
+  0b00111111, 0b11111100,
+  0b00011111, 0b11111000,
+  0b00001111, 0b11110000,
+  0b00000111, 0b11100000,
+  0b00000011, 0b11000000,
+  0b00000001, 0b10000000,
+  0b00000000, 0b00000000,
+  0b00000000, 0b00000000,
+  0b00000000, 0b00000000,
+  0b00000000, 0b00000000
 };
+
 
 struct FloatingHeart {
   bool active = false;
@@ -43,7 +54,7 @@ struct FloatingHeart {
   uint16_t color;
 };
 
-#define MAX_HEARTS 12          // достаточно для красивого эффекта
+#define MAX_HEARTS 8          // достаточно для красивого эффекта
 FloatingHeart hearts[MAX_HEARTS];
 
 unsigned long lastHeartUpdate = 0;
@@ -96,13 +107,13 @@ void drawHearts() {
   for (int i = 0; i < MAX_HEARTS; i++) {
     if (hearts[i].active) {
       // 1. Стираем старое положение (рисуем чёрный прямоугольник)
-      tft.fillRect(hearts[i].prevX, hearts[i].prevY, 8, 8, ST77XX_BLACK);
+      tft.fillRect(hearts[i].prevX, hearts[i].prevY, artSize, artSize, ST77XX_BLACK);
 
       // 2. Рисуем сердечко на новом месте
-      tft.drawBitmap(hearts[i].x, hearts[i].y, heartBitmap, 8, 8, hearts[i].color);
+      tft.drawBitmap(hearts[i].x, hearts[i].y, artBitmap, artSize, artSize, hearts[i].color);
     } 
     else if (hearts[i].prevX != -9999) {   // опционально: дорисовываем стирание при деактивации
-      tft.fillRect(hearts[i].prevX, hearts[i].prevY, 8, 8, ST77XX_BLACK);
+      tft.fillRect(hearts[i].prevX, hearts[i].prevY, artSize, artSize, ST77XX_BLACK);
       hearts[i].prevX = -9999; // метка, что уже стёрто
     }
   }
@@ -113,9 +124,9 @@ void showMessageOnScreen(const String &msg) {
   tft.fillScreen(ST77XX_BLACK);
   tft.setCursor(0, 0);
   tft.setTextColor(ST77XX_GREEN);
-  tft.setTextSize(1);
-  tft.println("WebSocket msg:");
-  tft.println("----------------");
+  tft.setTextSize(2);
+  tft.println("Message:");
+  tft.println("-------------");
 
   tft.setTextColor(ST77XX_WHITE);
   int start = 0;
@@ -135,7 +146,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
       tft.fillScreen(ST77XX_BLACK);
       tft.setCursor(0, 0);
       tft.setTextColor(ST77XX_RED);
-      tft.setTextSize(1);
+      tft.setTextSize(2);
       tft.println("WebSocket off");
       break;
 
@@ -144,7 +155,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
       tft.fillScreen(ST77XX_BLACK);
       tft.setCursor(0, 0);
       tft.setTextColor(ST77XX_GREEN);
-      tft.setTextSize(1);
+      tft.setTextSize(2);
       tft.println("WebSocket connected");
       break;
 
@@ -188,7 +199,7 @@ void setup() {
   tft.initR(INITR_BLACKTAB);
   tft.setRotation(1);
   tft.fillScreen(ST77XX_BLACK);
-  tft.setTextSize(1);
+  tft.setTextSize(2);
   tft.setTextColor(ST77XX_WHITE);
   tft.setCursor(0, 0);
   tft.println("Starting...");
