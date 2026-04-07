@@ -23,10 +23,10 @@ WebSocketsClient webSocket;
 // Экран
 Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
 
-const int artSize = 8;
+const int pBitmapSize = 8;
 
 // ==================== СЕРДЕЧКИ (TikTok-style) ====================
-const uint8_t artBitmap[] PROGMEM = {
+const uint8_t particleBitmap[] PROGMEM = {
   0b01100110,
   0b11111111,
   0b11111111,
@@ -38,7 +38,7 @@ const uint8_t artBitmap[] PROGMEM = {
 };
 
 
-struct FloatingHeart {
+struct FloatingParticle {
   bool active = false;
   int16_t x, y;           // текущие
   int16_t prevX, prevY;   // предыдущие — для стирания
@@ -46,67 +46,67 @@ struct FloatingHeart {
   uint16_t color;
 };
 
-#define MAX_HEARTS 8          // достаточно для красивого эффекта
-FloatingHeart hearts[MAX_HEARTS];
+#define MAX_PARTICLES 8          // достаточно для красивого эффекта
+FloatingParticle Particles[MAX_PARTICLES];
 
-unsigned long lastHeartUpdate = 0;
+unsigned long lastParticleUpdate = 0;
 unsigned long lastSpawnCheck = 0;
 
-// ==================== ФУНКЦИИ СЕРДЕЧЕК ====================
-void spawnHeart() {
-  for (int i = 0; i < MAX_HEARTS; i++) {
-    if (!hearts[i].active) {
-      hearts[i].active = true;
-      hearts[i].x = random(10, tft.width() - 18);
-      hearts[i].y = tft.height() + 5;           // начинаем чуть ниже экрана
-      hearts[i].vx = random(-2, 3);             // лёгкое покачивание
-      hearts[i].vy = -(3 + random(0, 3));       // скорость вверх
-      hearts[i].color = tft.color565(random(200, 255), random(20, 100), random(100, 255));
+// ==================== ФУНКЦИИ ЧАСТИЦ ====================
+void spawnParticle() {
+  for (int i = 0; i < MAX_PARTICLES; i++) {
+    if (!Particles[i].active) {
+      Particles[i].active = true;
+      Particles[i].x = random(10, tft.width() - 18);
+      Particles[i].y = tft.height() + 5;           // начинаем чуть ниже экрана
+      Particles[i].vx = random(-2, 3);             // лёгкое покачивание
+      Particles[i].vy = -(3 + random(0, 3));       // скорость вверх
+      Particles[i].color = tft.color565(random(200, 255), random(20, 100), random(100, 255));
       return;
     }
   }
 }
 
-void updateHearts() {
+void updateParticles() {
   unsigned long now = millis();
-  if (now - lastHeartUpdate < 35) return;   // 35 = ~28 fps
-  lastHeartUpdate = now;
+  if (now - lastParticleUpdate < 35) return;   // 35 = ~28 fps
+  lastParticleUpdate = now;
 
-  for (int i = 0; i < MAX_HEARTS; i++) {
-    if (hearts[i].active) {
+  for (int i = 0; i < MAX_PARTICLES; i++) {
+    if (Particles[i].active) {
       // Сохраняем текущие координаты как предыдущие ПЕРЕД движением
-      hearts[i].prevX = hearts[i].x;
-      hearts[i].prevY = hearts[i].y;
+      Particles[i].prevX = Particles[i].x;
+      Particles[i].prevY = Particles[i].y;
 
       // Двигаем
-      hearts[i].x += hearts[i].vx;
-      hearts[i].y += hearts[i].vy;
+      Particles[i].x += Particles[i].vx;
+      Particles[i].y += Particles[i].vy;
 
       // Случайное покачивание
       if (random(0, 10) == 0) {
-        hearts[i].vx = -hearts[i].vx;
+        Particles[i].vx = -Particles[i].vx;
       }
 
       // Удаляем, если вылетело за экран
-      if (hearts[i].y < -15 || hearts[i].x < -10 || hearts[i].x > tft.width() + 10) {
-        hearts[i].active = false;
+      if (Particles[i].y < -15 || Particles[i].x < -10 || Particles[i].x > tft.width() + 10) {
+        Particles[i].active = false;
       }
     }
   }
 }
 
-void drawHearts() {
-  for (int i = 0; i < MAX_HEARTS; i++) {
-    if (hearts[i].active) {
+void drawParticles() {
+  for (int i = 0; i < MAX_PARTICLES; i++) {
+    if (Particles[i].active) {
       // 1. Стираем старое положение (рисуем чёрный прямоугольник)
-      tft.fillRect(hearts[i].prevX, hearts[i].prevY, artSize, artSize, ST77XX_BLACK);
+      tft.fillRect(Particles[i].prevX, Particles[i].prevY, pBitmapSize, pBitmapSize, ST77XX_BLACK);
 
       // 2. Рисуем сердечко на новом месте
-      tft.drawBitmap(hearts[i].x, hearts[i].y, artBitmap, artSize, artSize, hearts[i].color);
+      tft.drawBitmap(Particles[i].x, Particles[i].y, particleBitmap, pBitmapSize, pBitmapSize, Particles[i].color);
     } 
-    else if (hearts[i].prevX != -9999) {   // опционально: дорисовываем стирание при деактивации
-      tft.fillRect(hearts[i].prevX, hearts[i].prevY, artSize, artSize, ST77XX_BLACK);
-      hearts[i].prevX = -9999; // метка, что уже стёрто
+    else if (Particles[i].prevX != -9999) {   // опционально: дорисовываем стирание при деактивации
+      tft.fillRect(Particles[i].prevX, Particles[i].prevY, pBitmapSize, pBitmapSize, ST77XX_BLACK);
+      Particles[i].prevX = -9999; // метка, что уже стёрто
     }
   }
 }
@@ -161,7 +161,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
       if (message.indexOf("<3") != -1 || message.indexOf("❤️") != -1) {
         // запускаем сразу 3–5 сердечек для красивого эффекта
         for (int i = 0; i < 1; i++) {
-          spawnHeart();
+          spawnParticle();
         }
       }else{
         showMessageOnScreen(message);
@@ -214,7 +214,7 @@ void setup() {
   tft.println(WiFi.localIP());
 
   // Инициализация сердечек
-  for (int i = 0; i < MAX_HEARTS; i++) hearts[i].active = false;
+  for (int i = 0; i < MAX_PARTICLES; i++) Particles[i].active = false;
 
   // WebSocket
   String host = custom_server_host.getValue();
@@ -230,8 +230,8 @@ void loop() {
   webSocket.loop();
 
   // Обновление и отрисовка сердечек
-  updateHearts();
-  drawHearts();
+  updateParticles();
+  drawParticles();
 
   // Кнопка сброса
   if (digitalRead(resetButton) == LOW) {
