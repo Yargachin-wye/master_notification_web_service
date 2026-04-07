@@ -11,7 +11,10 @@
 #define TFT_DC    21
 #define TFT_SCLK  18
 #define TFT_MOSI  23
-
+// Энкодер (A, B, кнопка)
+#define ENC_A     25
+#define ENC_B     26
+#define ENC_BTN   27
 // ==================== WiFi и WebSocket ====================
 WiFiManager wm;
 WiFiManagerParameter custom_server_host(
@@ -328,7 +331,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
       
 
       // === ЗАПУСК СЕРДЕЧЕК, если в сообщении есть <3 ===
-      if (message.indexOf("<3") != -1 || message.indexOf("❤️") != -1) {
+      if (message.indexOf("<3") != -1) {
         // запускаем сразу 3–5 сердечек для красивого эффекта
         for (int i = 0; i < 1; i++) {
           spawnParticle();
@@ -354,6 +357,7 @@ void setup() {
   Serial.begin(115200);
   delay(1000);
   pinMode(resetButton, INPUT_PULLUP);
+  pinMode(ENC_BTN, INPUT_PULLUP);
 
   Serial.println("\n=== ESP32 + WebSocket + Сердечки ===");
 
@@ -424,6 +428,18 @@ void loop() {
   if (digitalRead(resetButton) == LOW) {
     delay(50);
     if (digitalRead(resetButton) == LOW) resetWiFi();
+  }
+
+  // Кнопка энкодера - обновление времени и погоды
+  if (digitalRead(ENC_BTN) == LOW) {
+    delay(50); // антидребезг
+    if (digitalRead(ENC_BTN) == LOW) {
+      Serial.println(" Обновление времени и погоды...");
+      displayDateTimeWeather();
+      lastTimeWeatherUpdate = millis();
+      // Ждем отпускания кнопки
+      while (digitalRead(ENC_BTN) == LOW) delay(10);
+    }
   }
 
   // Небольшая пауза, чтобы не нагружать CPU на 100%

@@ -106,7 +106,7 @@ app.get('/weather', (req, res) => {
     const weatherData = {
         temp: 25.5,
         humidity: 60,
-        description: "ясно"
+        description: "clear"
     };
     res.json(weatherData);
 });
