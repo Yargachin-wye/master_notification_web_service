@@ -27,11 +27,13 @@ const int artSize = 16;
 
 // ==================== СЕРДЕЧКИ (TikTok-style) ====================
 const uint8_t artBitmap[] PROGMEM = {
-  0b00001100, 0b00110000,
-  0b00011110, 0b01111000,
-  0b00111111, 0b11111100,
+  0b00011100, 0b00111000,
+  0b00111110, 0b01111100,
   0b01111111, 0b11111110,
-  0b01111111, 0b11111110,
+  0b11111111, 0b11111111,
+  0b11111111, 0b11111111,
+  0b11111111, 0b11111111,
+  0b11111111, 0b11111111,
   0b01111111, 0b11111110,
   0b00111111, 0b11111100,
   0b00011111, 0b11111000,
@@ -39,8 +41,6 @@ const uint8_t artBitmap[] PROGMEM = {
   0b00000111, 0b11100000,
   0b00000011, 0b11000000,
   0b00000001, 0b10000000,
-  0b00000000, 0b00000000,
-  0b00000000, 0b00000000,
   0b00000000, 0b00000000,
   0b00000000, 0b00000000
 };
@@ -77,7 +77,7 @@ void spawnHeart() {
 
 void updateHearts() {
   unsigned long now = millis();
-  if (now - lastHeartUpdate < 35) return;   // ~28 fps
+  if (now - lastHeartUpdate < 35) return;   // 35 = ~28 fps
   lastHeartUpdate = now;
 
   for (int i = 0; i < MAX_HEARTS; i++) {
