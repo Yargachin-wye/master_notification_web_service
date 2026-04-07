@@ -69,8 +69,8 @@ app.get('/', (req, res) => {
           });
         }
 
-        function sendLike() { sendNotification('❤️ Лайк получен!'); }
-        function sendHello() { sendNotification('👋 Привет от сервера!'); }
+        function sendLike() { sendNotification('<3'); }
+        function sendHello() { sendNotification('Hi!'); }
         function sendCustom() {
           const text = document.getElementById('msg').value || 'Пустое сообщение';
           sendNotification(text);
