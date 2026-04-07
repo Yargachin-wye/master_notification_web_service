@@ -2,6 +2,7 @@
 #include <WiFiManager.h>
 #include <WebSocketsClient.h>
 #include <Adafruit_ST7735.h>
+#include <HTTPClient.h>
 
 // ==================== TFT ПИНЫ ====================
 #define TFT_CS    5
@@ -9,6 +10,11 @@
 #define TFT_DC    21
 #define TFT_SCLK  18
 #define TFT_MOSI  23
+
+// ==================== ЭНКОДЕР ПИНЫ ====================
+#define ENC_A     25
+#define ENC_B     26
+#define ENC_BTN   27
 
 // ==================== WiFi и WebSocket ====================
 WiFiManager wm;
@@ -37,7 +43,7 @@ const uint8_t particleBitmap[] PROGMEM = {
   0b00000000
 };
 
-
+// ==================== ЧАСТИЦЫ ====================
 struct FloatingParticle {
   bool active = false;
   int16_t x, y;           // текущие
@@ -193,8 +199,77 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
   }
 }
 
+// ==================== ПОГОДА ====================
+void fetchWeather() {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi не подключен");
+    return;
+  }
+
+  HTTPClient http;
+  String serverHost = custom_server_host.getValue();
+  
+  // Используем HTTP для локального сервера или HTTPS для render.com
+  String url;
+  if (serverHost.indexOf("localhost") >= 0 || serverHost.indexOf("192.168.") >= 0) {
+    url = "http://" + serverHost + "/weather";
+  } else {
+    url = "https://" + serverHost + "/weather";
+  }
+  
+  Serial.println("\n--- Запрос погоды ---");
+  Serial.print("URL: ");
+  Serial.println(url);
+  
+  http.begin(url);
+  http.setTimeout(5000);
+  int httpCode = http.GET();
+  
+  if (httpCode == 200) {
+    String payload = http.getString();
+    Serial.println("Ответ сервера:");
+    Serial.println(payload);
+    
+    // Простой парсинг значений
+    int cityStart = payload.indexOf("\"city\":\"") + 9;
+    int cityEnd = payload.indexOf("\"", cityStart);
+    String city = payload.substring(cityStart, cityEnd);
+    
+    int timeStart = payload.indexOf("\"time\":\"") + 9;
+    int timeEnd = payload.indexOf("\"", timeStart);
+    String time = payload.substring(timeStart, timeEnd);
+    
+    int tempStart = payload.indexOf("\"temperature\":") + 15;
+    int tempEnd = payload.indexOf(",", tempStart);
+    String temp = payload.substring(tempStart, tempEnd);
+    
+    Serial.print("Город: ");
+    Serial.println(city);
+    Serial.print("Время: ");
+    Serial.println(time);
+    Serial.print("Температура: ");
+    Serial.print(temp);
+    Serial.println("C");
+    
+    // Выводим на экран
+    String displayText = city + "\n" + time + "\n" + temp + "C";
+    showMessageOnScreen(displayText);
+  } else {
+    Serial.print("Ошибка HTTP: ");
+    Serial.println(httpCode);
+    showMessageOnScreen("Ошибка погоды\nHTTP: " + String(httpCode));
+  }
+  
+  http.end();
+  Serial.println("---------------------\n");
+}
+
 // ==================== СБРОС ====================
 const int resetButton = 0;
+
+// Дебаунс кнопки энкодера
+unsigned long lastBtnPress = 0;
+const unsigned long BTN_DEBOUNCE = 200;
 
 void resetWiFi() {
   wm.resetSettings();
@@ -206,8 +281,9 @@ void setup() {
   Serial.begin(115200);
   delay(1000);
   pinMode(resetButton, INPUT_PULLUP);
+  pinMode(ENC_BTN, INPUT_PULLUP);
 
-  Serial.println("\n=== ESP32 + WebSocket + Сердечки ===");
+  Serial.println("\n=== ESP32 + WebSocket + Погода ===");
 
   // Инициализация экрана
   tft.initR(INITR_BLACKTAB);
@@ -259,6 +335,16 @@ void loop() {
   if (digitalRead(resetButton) == LOW) {
     delay(50);
     if (digitalRead(resetButton) == LOW) resetWiFi();
+  }
+
+  // Кнопка энкодера - запрос погоды
+  if (digitalRead(ENC_BTN) == LOW) {
+    unsigned long now = millis();
+    if (now - lastBtnPress > BTN_DEBOUNCE) {
+      lastBtnPress = now;
+      Serial.println("[ENC] Кнопка нажата - запрашиваем погоду");
+      fetchWeather();
+    }
   }
 
   // Небольшая пауза, чтобы не нагружать CPU на 100%
