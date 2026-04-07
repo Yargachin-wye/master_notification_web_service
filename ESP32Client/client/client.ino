@@ -25,14 +25,14 @@ Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RS
 
 // ==================== СЕРДЕЧКИ (TikTok-style) ====================
 const uint8_t heartBitmap[8] PROGMEM = {
-  0b01100110,
-  0b11111111,
-  0b11111111,
-  0b11111111,
-  0b01111110,
-  0b00111100,
   0b00011000,
-  0b00000000
+  0b00011000,
+  0b11111111,
+  0b11111111,
+  0b00011000,
+  0b00011000,
+  0b00011000,
+  0b00011000
 };
 
 struct FloatingHeart {
