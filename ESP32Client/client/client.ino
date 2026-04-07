@@ -2,6 +2,8 @@
 #include <WiFiManager.h>
 #include <WebSocketsClient.h>
 #include <Adafruit_ST7735.h>
+#include <HTTPClient.h>
+#include <time.h>
 
 // ==================== TFT ПИНЫ ====================
 #define TFT_CS    5
@@ -53,7 +55,151 @@ FloatingParticle Particles[MAX_PARTICLES];
 unsigned long lastParticleUpdate = 0;
 unsigned long lastSpawnCheck = 0;
 
-// ==================== ФУНКЦИИ ЧАСТИЦ ====================
+// ==================== NTP и погода ====================
+const char* ntpServer = "pool.ntp.org";
+const long gmtOffset_sec = 3600 * 7;  // GMT+7 (Bangkok, Jakarta, etc)
+const int daylightOffset_sec = 0;
+
+// OpenWeatherMap API (бесплатный ключ нужно получить на openweathermap.org)
+const char* weatherApiKey = "5d429dd05fc20ad66d43fcc5a5dbb694";  // Замените на свой API ключ
+const char* city = "Novosibirsk";              // Замените на свой город
+const char* countryCode = "RU";            // Код страны
+
+struct WeatherData {
+  float temp;
+  int humidity;
+  String description;
+  String icon;
+};
+
+WeatherData currentWeather;
+unsigned long lastWeatherUpdate = 0;
+const unsigned long weatherUpdateInterval = 600000; // 10 минут
+
+// ==================== ФУНКЦИИ ВРЕМЕНИ ====================
+void initTime() {
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+  Serial.println("⏰ Синхронизация времени...");
+  
+  struct tm timeinfo;
+  int attempts = 0;
+  while (!getLocalTime(&timeinfo) && attempts < 10) {
+    Serial.print(".");
+    delay(500);
+    attempts++;
+  }
+  
+  if (attempts < 10) {
+    Serial.println("\n✅ Время синхронизировано!");
+  } else {
+    Serial.println("\n❌ Не удалось синхронизировать время");
+  }
+}
+
+void printCurrentTime() {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) {
+    Serial.println("❌ Не удалось получить время");
+    return;
+  }
+  
+  char timeString[25];
+  strftime(timeString, sizeof(timeString), "%Y-%m-%d %H:%M:%S", &timeinfo);
+  
+  Serial.println("\n========== 📅 ТЕКУЩЕЕ ВРЕМЯ ==========");
+  Serial.print("Дата: ");
+  Serial.println(timeString);
+  Serial.print("День недели: ");
+  switch(timeinfo.tm_wday) {
+    case 0: Serial.println("Воскресенье"); break;
+    case 1: Serial.println("Понедельник"); break;
+    case 2: Serial.println("Вторник"); break;
+    case 3: Serial.println("Среда"); break;
+    case 4: Serial.println("Четверг"); break;
+    case 5: Serial.println("Пятница"); break;
+    case 6: Serial.println("Суббота"); break;
+  }
+  Serial.println("=====================================\n");
+}
+
+// ==================== ФУНКЦИИ ПОГОДЫ ====================
+void fetchWeather() {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("❌ Нет подключения к WiFi");
+    return;
+  }
+  
+  HTTPClient http;
+  String url = "http://api.openweathermap.org/data/2.5/weather?q=" + 
+               String(city) + "," + String(countryCode) + 
+               "&appid=" + String(weatherApiKey) + 
+               "&units=metric&lang=ru";
+  
+  Serial.println("🌤️  Запрос погоды...");
+  http.begin(url);
+  int httpCode = http.GET();
+  
+  if (httpCode == 200) {
+    String payload = http.getString();
+    
+    // Простой парсинг JSON
+    int tempIndex = payload.indexOf("\"temp\":") + 7;
+    int tempEnd = payload.indexOf(",", tempIndex);
+    currentWeather.temp = payload.substring(tempIndex, tempEnd).toFloat();
+    
+    int humIndex = payload.indexOf("\"humidity\":") + 11;
+    int humEnd = payload.indexOf(",", humIndex);
+    if (humEnd == -1) humEnd = payload.indexOf("}", humIndex);
+    currentWeather.humidity = payload.substring(humIndex, humEnd).toInt();
+    
+    int descIndex = payload.indexOf("\"description\":\"") + 16;
+    int descEnd = payload.indexOf("\"", descIndex);
+    currentWeather.description = payload.substring(descIndex, descEnd);
+    
+    lastWeatherUpdate = millis();
+    Serial.println("✅ Погода обновлена!");
+  } else {
+    Serial.printf("❌ Ошибка HTTP: %d\n", httpCode);
+    Serial.println("   Проверьте API ключ и подключение");
+  }
+  
+  http.end();
+}
+
+void printWeather() {
+  if (millis() - lastWeatherUpdate > weatherUpdateInterval) {
+    fetchWeather();
+  }
+  
+  // Если погода не была получена ни разу
+  if (lastWeatherUpdate == 0) {
+    fetchWeather();
+  }
+  
+  Serial.println("\n========== 🌤️  ПОГОДА ==========");
+  
+  Serial.print(city);
+  Serial.print(" ");
+  Serial.print(currentWeather.temp);
+  Serial.print("°C Humidity: ");
+  Serial.print(currentWeather.humidity);
+  Serial.print("% ");
+  Serial.println(currentWeather.description);
+}
+
+// ==================== ОБРАБОТКА КОМАНД ====================
+void handleSerialCommands() {
+  if (Serial.available()) {
+    String command = Serial.readStringUntil('\n');
+    command.trim();
+    command.toLowerCase();
+
+    if (command == "all") {
+      printCurrentTime();
+      printWeather();
+    }
+  }
+}
 void spawnParticle() {
   for (int i = 0; i < MAX_PARTICLES; i++) {
     if (!Particles[i].active) {
@@ -245,11 +391,21 @@ void setup() {
   webSocket.beginSSL(host.c_str(), 443, "/");
   webSocket.onEvent(webSocketEvent);
   webSocket.setReconnectInterval(5000);
+
+  // Инициализация времени
+  initTime();
+  
+  // Приветственное сообщение
+  Serial.println("\n📱 'Умные часы' готовы!");
+  Serial.println("Введите 'help' для списка команд\n");
 }
 
 // ==================== LOOP (НЕБЛОКИРУЮЩИЙ) ====================
 void loop() {
   webSocket.loop();
+
+  // Обработка Serial команд
+  handleSerialCommands();
 
   // Обновление и отрисовка сердечек
   updateParticles();
