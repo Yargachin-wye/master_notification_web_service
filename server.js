@@ -48,7 +48,7 @@ app.get('/', (req, res) => {
     <body>
       <h1>Отправка уведомления на ESP32</h1>
       
-      <input type="text" id="msg" placeholder="Введите текст уведомления" value="Привет! Кто-то нажал кнопку">
+      <input type="text" id="msg" placeholder="Введите текст уведомления" value="Hello world!">
       <br>
       <button onclick="sendLike()">❤️ Отправить "Лайк"</button>
       <button onclick="sendCustom()">Отправить своё сообщение</button>
