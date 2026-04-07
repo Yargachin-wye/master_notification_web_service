@@ -60,11 +60,6 @@ const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = 3600 * 7;  // GMT+7 (Bangkok, Jakarta, etc)
 const int daylightOffset_sec = 0;
 
-// OpenWeatherMap API (бесплатный ключ нужно получить на openweathermap.org)
-const char* weatherApiKey = "5d429dd05fc20ad66d43fcc5a5dbb694";  // Замените на свой API ключ
-const char* city = "Novosibirsk";              // Замените на свой город
-const char* countryCode = "RU";            // Код страны
-
 struct WeatherData {
   float temp;
   int humidity;
@@ -128,41 +123,45 @@ void fetchWeather() {
     Serial.println("❌ Нет подключения к WiFi");
     return;
   }
-  
+
   HTTPClient http;
-  String url = "http://api.openweathermap.org/data/2.5/weather?q=" + 
-               String(city) + "," + String(countryCode) + 
-               "&appid=" + String(weatherApiKey) + 
-               "&units=metric&lang=ru";
-  
+  String host = custom_server_host.getValue();
+  // Убираем https:// или http:// если есть
+  if (host.startsWith("https://")) host = host.substring(8);
+  if (host.startsWith("http://")) host = host.substring(7);
+
+  String url = "https://" + host + "/weather";
+
   Serial.println("🌤️  Запрос погоды...");
   http.begin(url);
   int httpCode = http.GET();
-  
+
   if (httpCode == 200) {
     String payload = http.getString();
-    
-    // Простой парсинг JSON
+
+    // Парсинг JSON
     int tempIndex = payload.indexOf("\"temp\":") + 7;
     int tempEnd = payload.indexOf(",", tempIndex);
+    if (tempEnd == -1) tempEnd = payload.indexOf("}", tempIndex);
     currentWeather.temp = payload.substring(tempIndex, tempEnd).toFloat();
-    
+
     int humIndex = payload.indexOf("\"humidity\":") + 11;
     int humEnd = payload.indexOf(",", humIndex);
     if (humEnd == -1) humEnd = payload.indexOf("}", humIndex);
     currentWeather.humidity = payload.substring(humIndex, humEnd).toInt();
-    
+
     int descIndex = payload.indexOf("\"description\":\"") + 16;
-    int descEnd = payload.indexOf("\"", descIndex);
-    currentWeather.description = payload.substring(descIndex, descEnd);
-    
+    if (descIndex > 15) {
+      int descEnd = payload.indexOf("\"", descIndex);
+      currentWeather.description = payload.substring(descIndex, descEnd);
+    }
+
     lastWeatherUpdate = millis();
     Serial.println("✅ Погода обновлена!");
   } else {
     Serial.printf("❌ Ошибка HTTP: %d\n", httpCode);
-    Serial.println("   Проверьте API ключ и подключение");
   }
-  
+
   http.end();
 }
 

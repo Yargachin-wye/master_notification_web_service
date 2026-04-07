@@ -101,6 +101,16 @@ app.post('/notify', (req, res) => {
     res.send(`Уведомление "${message}" отправлено ${sentCount} устройствам`);
 });
 
+// Эндпоинт для погоды (Новосибирск)
+app.get('/weather', (req, res) => {
+    const weatherData = {
+        temp: 25.5,
+        humidity: 60,
+        description: "ясно"
+    };
+    res.json(weatherData);
+});
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`Сервер запущен на порту ${PORT}`);
