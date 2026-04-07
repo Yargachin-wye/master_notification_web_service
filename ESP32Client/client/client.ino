@@ -44,6 +44,7 @@ struct FloatingParticle {
   int16_t prevX, prevY;   // предыдущие — для стирания
   int8_t vx, vy;
   uint16_t color;
+  uint8_t life = 255;     // жизнь частицы (0-255), для плавного затухания
 };
 
 #define MAX_PARTICLES 8          // достаточно для красивого эффекта
@@ -62,6 +63,7 @@ void spawnParticle() {
       Particles[i].vx = random(-2, 3);             // лёгкое покачивание
       Particles[i].vy = -(3 + random(0, 3));       // скорость вверх
       Particles[i].color = tft.color565(random(200, 255), random(20, 100), random(100, 255));
+      Particles[i].life = 255;                     // полная жизнь при спавне
       return;
     }
   }
@@ -91,6 +93,14 @@ void updateParticles() {
       if (Particles[i].y < -15 || Particles[i].x < -10 || Particles[i].x > tft.width() + 10) {
         Particles[i].active = false;
       }
+      
+      // Плавное затухание при приближении к верху экрана
+      if (Particles[i].y < 30) {
+        Particles[i].life = (Particles[i].y * 255) / 30; // линейное затухание
+        if (Particles[i].life < 10) {
+          Particles[i].active = false;
+        }
+      }
     }
   }
 }
@@ -101,8 +111,20 @@ void drawParticles() {
       // 1. Стираем старое положение (рисуем чёрный прямоугольник)
       tft.fillRect(Particles[i].prevX, Particles[i].prevY, pBitmapSize, pBitmapSize, ST77XX_BLACK);
 
-      // 2. Рисуем сердечко на новом месте
-      tft.drawBitmap(Particles[i].x, Particles[i].y, particleBitmap, pBitmapSize, pBitmapSize, Particles[i].color);
+      // 2. Вычисляем цвет с учётом прозрачности (life)
+      uint8_t r = (Particles[i].color >> 11) & 0x1F;
+      uint8_t g = (Particles[i].color >> 5) & 0x3F;
+      uint8_t b = Particles[i].color & 0x1F;
+      
+      // Применяем life как коэффициент прозрачности (0-255)
+      r = (r * Particles[i].life) >> 8;
+      g = (g * Particles[i].life) >> 8;
+      b = (b * Particles[i].life) >> 8;
+      
+      uint16_t fadedColor = (r << 11) | (g << 5) | b;
+
+      // 3. Рисуем сердечко на новом месте с учётом затухания
+      tft.drawBitmap(Particles[i].x, Particles[i].y, particleBitmap, pBitmapSize, pBitmapSize, fadedColor);
     } 
     else if (Particles[i].prevX != -9999) {   // опционально: дорисовываем стирание при деактивации
       tft.fillRect(Particles[i].prevX, Particles[i].prevY, pBitmapSize, pBitmapSize, ST77XX_BLACK);
