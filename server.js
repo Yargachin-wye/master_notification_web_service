@@ -13,7 +13,7 @@ wss.on('connection', (ws) => {
     console.log('ESP32 или клиент подключился');
     clients.add(ws);
 
-    ws.send('✅ Подключено к серверу успешно!');
+    ws.send('Connected to the server successfully!');
 
     ws.on('message', (msg) => {
         console.log('Сообщение от клиента:', msg.toString());
