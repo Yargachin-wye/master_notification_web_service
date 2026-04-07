@@ -166,40 +166,8 @@ void fetchWeather() {
   http.end();
 }
 
-void printWeather() {
-  if (millis() - lastWeatherUpdate > weatherUpdateInterval) {
-    fetchWeather();
-  }
-  
-  // Если погода не была получена ни разу
-  if (lastWeatherUpdate == 0) {
-    fetchWeather();
-  }
-  
-  Serial.println("\n========== 🌤️  ПОГОДА ==========");
-  
-  Serial.print(city);
-  Serial.print(" ");
-  Serial.print(currentWeather.temp);
-  Serial.print("°C Humidity: ");
-  Serial.print(currentWeather.humidity);
-  Serial.print("% ");
-  Serial.println(currentWeather.description);
-}
-
 // ==================== ОБРАБОТКА КОМАНД ====================
-void handleSerialCommands() {
-  if (Serial.available()) {
-    String command = Serial.readStringUntil('\n');
-    command.trim();
-    command.toLowerCase();
 
-    if (command == "all") {
-      printCurrentTime();
-      printWeather();
-    }
-  }
-}
 void spawnParticle() {
   for (int i = 0; i < MAX_PARTICLES; i++) {
     if (!Particles[i].active) {
@@ -241,7 +209,7 @@ void updateParticles() {
       }
       
       // Плавное затухание при приближении к верху экрана
-      if (Particles[i].y < 30) {
+      if (Particles[i].y < 80) {
         Particles[i].life = (Particles[i].y * 255) / 30; // линейное затухание
         if (Particles[i].life < 10) {
           Particles[i].active = false;
@@ -279,14 +247,49 @@ void drawParticles() {
   }
 }
 
-// ==================== ВЫВОД СООБЩЕНИЯ ====================
-void showMessageOnScreen(const String &msg) {
-  tft.fillScreen(ST77XX_BLACK);
+// ==================== ВЫВОД ДАТЫ/ВРЕМЕНИ И ПОГОДЫ НА ЭКРАН ====================
+void displayDateTimeWeather() {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) {
+    return;
+  }
+  
+  // Обновляем погоду если нужно
+  if (millis() - lastWeatherUpdate > weatherUpdateInterval || lastWeatherUpdate == 0) {
+    fetchWeather();
+  }
+  
+  char timeStr[20];
+  strftime(timeStr, sizeof(timeStr), "%d.%m %H:%M", &timeinfo);
+  
+  // Стираем область для даты/времени и погоды (2 строки)
+  tft.fillRect(0, 0, tft.width(), 32, ST77XX_BLACK);
+  
+  // Строка 1: Дата и время
   tft.setCursor(0, 0);
+  tft.setTextColor(ST77XX_CYAN);
+  tft.setTextSize(2);
+  tft.print(timeStr);
+  
+  // Строка 2: Погода
+  tft.setCursor(0, 16);
+  tft.setTextColor(ST77XX_YELLOW);
+  tft.setTextSize(2);
+  tft.print(currentWeather.temp, 0);
+  tft.print((char)247); // символ градуса
+  tft.print("C ");
+  tft.print(currentWeather.humidity);
+  tft.print("% ");
+  tft.print(currentWeather.description);
+}
+
+void showMessageOnScreen(const String &msg) {
+  // Оставляем верхние 2 строки (32 пикселя) для даты/времени и погоды
+  tft.fillRect(0, 32, tft.width(), tft.height() - 32, ST77XX_BLACK);
+  tft.setCursor(0, 34);
   tft.setTextColor(ST77XX_GREEN);
   tft.setTextSize(2);
-  tft.println("Message:");
-  tft.println("-------------");
+  tft.println("Msg:");
 
   tft.setTextColor(ST77XX_WHITE);
   int start = 0;
@@ -401,15 +404,22 @@ void setup() {
 }
 
 // ==================== LOOP (НЕБЛОКИРУЮЩИЙ) ====================
+unsigned long lastTimeWeatherUpdate = 0;
+const unsigned long timeWeatherInterval = 60000; // обновление каждую минуту
+
 void loop() {
   webSocket.loop();
-
-  // Обработка Serial команд
-  handleSerialCommands();
 
   // Обновление и отрисовка сердечек
   updateParticles();
   drawParticles();
+
+  // Обновление даты/времени и погоды
+  unsigned long now = millis();
+  if (now - lastTimeWeatherUpdate > timeWeatherInterval) {
+    displayDateTimeWeather();
+    lastTimeWeatherUpdate = now;
+  }
 
   // Кнопка сброса
   if (digitalRead(resetButton) == LOW) {
