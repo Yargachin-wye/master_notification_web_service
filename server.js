@@ -1,7 +1,6 @@
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
-const https = require('https');
 
 const app = express();
 const server = http.createServer(app);
@@ -100,52 +99,6 @@ app.post('/notify', (req, res) => {
 
     console.log(`Уведомление отправлено ${sentCount} клиентам: ${message}`);
     res.send(`Уведомление "${message}" отправлено ${sentCount} устройствам`);
-});
-
-// ==================== Эндпоинт для умных часов (погода и время) ====================
-// Координаты Новосибирска: 55.0415, 82.9346
-const NOVOSIBIRSK_LAT = 55.0415;
-const NOVOSIBIRSK_LON = 82.9346;
-
-function fetchWeather() {
-    return new Promise((resolve, reject) => {
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=${NOVOSIBIRSK_LAT}&longitude=${NOVOSIBIRSK_LON}&current_weather=true`;
-        https.get(url, (resp) => {
-            let data = '';
-            resp.on('data', (chunk) => data += chunk);
-            resp.on('end', () => {
-                try {
-                    const json = JSON.parse(data);
-                    resolve(json);
-                } catch (e) {
-                    reject(e);
-                }
-            });
-        }).on('error', reject);
-    });
-}
-
-app.get('/weather', async (req, res) => {
-    try {
-        const weatherData = await fetchWeather();
-        const current = weatherData.current_weather;
-        const now = new Date();
-        
-        // Формат для умных часов (простой текст)
-        const response = {
-            city: 'Новосибирск',
-            time: now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
-            date: now.toLocaleDateString('ru-RU'),
-            temperature: Math.round(current.temperature),
-            wind_speed: current.windspeed,
-            weather_code: current.weathercode
-        };
-        
-        res.json(response);
-    } catch (error) {
-        console.error('Ошибка получения погоды:', error);
-        res.status(500).json({ error: 'Не удалось получить погоду' });
-    }
 });
 
 const PORT = process.env.PORT || 3000;
