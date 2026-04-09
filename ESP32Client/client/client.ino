@@ -225,7 +225,7 @@ void spawnParticle() {
       Particles[i].color = tft.color565(r, g, b);
       Particles[i].life = 255;
 
-      flashLED(r, g, b);
+      flashLED(r, g/2, b);
       return;
     }
   }
