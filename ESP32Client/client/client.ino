@@ -187,7 +187,7 @@ const uint8_t particleBitmap[] PROGMEM = {
 };
 
 #define PARTICLE_SIZE            8      // размер битмапа (pBitmapSize)
-const int16_t FADE_START_Y     = 120; // с какого y начинаем плавное затухание
+const int16_t FADE_START_Y     = 90; // с какого y начинаем плавное затухание
 const int16_t FULL_DISAPPEAR_Y = 60;  // полностью исчезают здесь
 
 struct FloatingParticle {
@@ -325,13 +325,13 @@ void displayDateTimeWeather() {
   
   // Строка 1: Дата и время
   tft.setCursor(0, 0);
-  tft.setTextColor(ST77XX_CYAN);
+  tft.setTextColor(0xf800);
   tft.setTextSize(2);
   tft.print(timeStr);
   
   // Строка 2: Погода
   tft.setCursor(0, 16);
-  tft.setTextColor(ST77XX_YELLOW);
+  tft.setTextColor(0xf811);
   tft.setTextSize(2);
   tft.print(currentWeather.temp, 0);
   tft.print((char)247); // символ градуса
@@ -345,12 +345,12 @@ void showMessageOnScreen(const String &msg) {
   // Оставляем верхние 2 строки (32 пикселя) для даты/времени и погоды
   tft.fillRect(0, 32, tft.width(), tft.height() - 32, ST77XX_BLACK);
   tft.setCursor(0, 34);
-  tft.setTextColor(ST77XX_GREEN);
+  tft.setTextColor(0xb01f);
   tft.setTextSize(2);
   tft.println("Msg:");
   flashLED(0, 255, 0);
 
-  tft.setTextColor(ST77XX_WHITE);
+  tft.setTextColor(0xd6bf);
   int start = 0;
   while (start < msg.length()) {
     int end = start + 26;
