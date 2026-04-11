@@ -158,7 +158,7 @@ void fetchWeather() {
     if (humEnd == -1) humEnd = payload.indexOf("}", humIndex);
     currentWeather.humidity = payload.substring(humIndex, humEnd).toInt();
 
-    int descIndex = payload.indexOf("\"description\":\"") + 16;
+    int descIndex = payload.indexOf("\"description\":\"") + 15;
     if (descIndex > 15) {
       int descEnd = payload.indexOf("\"", descIndex);
       currentWeather.description = payload.substring(descIndex, descEnd);
@@ -338,6 +338,8 @@ void displayDateTimeWeather() {
   tft.print("C ");
   tft.print(currentWeather.humidity);
   tft.print("% ");
+  tft.setCursor(48, 32);
+  tft.setTextSize(1);
   tft.print(currentWeather.description);
 }
 
