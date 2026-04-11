@@ -7,10 +7,10 @@ const NOVOSIBIRSK_LAT = 55.03;
 const NOVOSIBIRSK_LON = 82.92;
 const API_KEY = '5d429dd05fc20ad66d43fcc5a5dbb694';
 let currentWeather = {
-    temp: data.main.temp,
-    humidity: data.main.humidity,
-    description: data.weather[0].description,
-    updatedAt: new Date().toISOString()
+    temp: null,
+    humidity: null,
+    description: null,
+    updatedAt: null
 };
 
 async function fetchWeather() {
@@ -19,19 +19,10 @@ async function fetchWeather() {
         const response = await fetch(url);
         const data = await response.json();
         
-        const weatherCodes = {
-            0: "clear", 1: "clear", 2: "partly cloudy", 3: "cloudy",
-            45: "fog", 48: "fog",
-            51: "drizzle", 53: "drizzle", 55: "drizzle",
-            61: "rain", 63: "rain", 65: "rain",
-            71: "snow", 73: "snow", 75: "snow",
-            95: "thunderstorm"
-        };
-        
         currentWeather = {
-            temp: data.current.temperature_2m,
-            humidity: data.current.relative_humidity_2m,
-            description: weatherCodes[data.current.weather_code] || "unknown",
+            temp: data.main.temp,
+            humidity: data.main.humidity,
+            description: data.weather[0].description,
             updatedAt: new Date().toISOString()
         };
         
