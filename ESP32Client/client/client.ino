@@ -325,13 +325,13 @@ void displayDateTimeWeather() {
   
   // Строка 1: Дата и время
   tft.setCursor(0, 0);
-  tft.setTextColor(0xf800);
+  tft.setTextColor(0xfedd);
   tft.setTextSize(2);
   tft.print(timeStr);
   
   // Строка 2: Погода
   tft.setCursor(0, 16);
-  tft.setTextColor(0xf811);
+  tft.setTextColor(0xa45f);
   tft.setTextSize(2);
   tft.print(currentWeather.temp, 0);
   tft.print((char)247); // символ градуса
