@@ -4,6 +4,14 @@
 #include <Adafruit_ST7735.h>
 #include <HTTPClient.h>
 #include <time.h>
+#include <U8g2_for_Adafruit_GFX.h>
+
+// Объект для шрифтов с кириллицей
+U8G2_FOR_ADAFRUIT_GFX u8g2Fonts;
+
+// Выбираем шрифты (большие и маленькие)
+const uint8_t* LARGE_FONT = u8g2_font_10x20_t_cyrillic;  // основной (для времени и сообщений)
+const uint8_t* SMALL_FONT = u8g2_font_6x13_t_cyrillic;   // для описания погоды
 
 // ==================== TFT ПИНЫ ====================
 #define TFT_CS    5
@@ -114,13 +122,13 @@ void printCurrentTime() {
   Serial.println(timeString);
   Serial.print("День недели: ");
   switch(timeinfo.tm_wday) {
-    case 0: Serial.println("Воскресенье"); break;
-    case 1: Serial.println("Понедельник"); break;
-    case 2: Serial.println("Вторник"); break;
-    case 3: Serial.println("Среда"); break;
-    case 4: Serial.println("Четверг"); break;
-    case 5: Serial.println("Пятница"); break;
-    case 6: Serial.println("Суббота"); break;
+    case 0: Serial.println("вс"); break;
+    case 1: Serial.println("пн"); break;
+    case 2: Serial.println("вт"); break;
+    case 3: Serial.println("ср"); break;
+    case 4: Serial.println("чт"); break;
+    case 5: Serial.println("пт"); break;
+    case 6: Serial.println("сб"); break;
   }
   Serial.println("=====================================\n");
 }
@@ -305,62 +313,75 @@ void drawParticles() {
   }
 }
 
+const char* shortDay[7] = {"вс", "пн", "вт", "ср", "чт", "пт", "сб"};
+
 // ==================== ВЫВОД ДАТЫ/ВРЕМЕНИ И ПОГОДЫ НА ЭКРАН ====================
 void displayDateTimeWeather() {
   struct tm timeinfo;
   if (!getLocalTime(&timeinfo)) {
     return;
   }
-  
-  // Обновляем погоду если нужно
+
   if (millis() - lastWeatherUpdate > weatherUpdateInterval || lastWeatherUpdate == 0) {
     fetchWeather();
   }
   
-  char timeStr[20];
-  strftime(timeStr, sizeof(timeStr), "%d.%m %H:%M", &timeinfo);
+  char timeStr[30];
+  snprintf(timeStr, sizeof(timeStr), "%02d.%02d %02d:%02d %s",
+           timeinfo.tm_mday,
+           timeinfo.tm_mon + 1,
+           timeinfo.tm_hour,
+           timeinfo.tm_min,
+           shortDay[timeinfo.tm_wday]);
+
+  char tempBuf[20];
+  snprintf(tempBuf, sizeof(tempBuf), "%.0f°C %d%% ", currentWeather.temp, currentWeather.humidity);
+
+  // Стираем верхнюю область (увеличили под новый шрифт)
+  tft.fillRect(0, 0, tft.width(), 44, ST77XX_BLACK);
+
+  // === Дата и время ===
+  u8g2Fonts.setFont(LARGE_FONT);
+  u8g2Fonts.setForegroundColor(0xfedd);
+  u8g2Fonts.setCursor(0, 16);
+  u8g2Fonts.print(timeStr);
   
-  // Стираем область для даты/времени и погоды (2 строки)
-  tft.fillRect(0, 0, tft.width(), 32, ST77XX_BLACK);
-  
-  // Строка 1: Дата и время
-  tft.setCursor(0, 0);
-  tft.setTextColor(0xfedd);
-  tft.setTextSize(2);
-  tft.print(timeStr);
-  
-  // Строка 2: Погода
-  tft.setCursor(0, 16);
-  tft.setTextColor(0xa45f);
-  tft.setTextSize(2);
-  tft.print(currentWeather.temp, 0);
-  tft.print((char)247); // символ градуса
-  tft.print("C ");
-  tft.print(currentWeather.humidity);
-  tft.print("% ");
-  tft.setCursor(48, 32);
-  tft.setTextSize(1);
-  tft.print(currentWeather.description);
+  // === Температура ===
+  u8g2Fonts.setForegroundColor(0xa45f);
+  u8g2Fonts.setCursor(0, 32);
+  u8g2Fonts.print(tempBuf);
+
+  // === Описание погоды ===
+  u8g2Fonts.setCursor(0, 44);
+  u8g2Fonts.print(currentWeather.description);
 }
 
+// ==================== ВЫВОД СООБЩЕНИЯ НА ЭКРАН ====================
 void showMessageOnScreen(const String &msg) {
-  // Оставляем верхние 2 строки (32 пикселя) для даты/времени и погоды
-  tft.fillRect(0, 32, tft.width(), tft.height() - 32, ST77XX_BLACK);
-  tft.setCursor(0, 34);
-  tft.setTextColor(0xb01f);
-  tft.setTextSize(2);
-  tft.println("Msg:");
-  flashLED(0, 255, 0);
+  tft.fillRect(0, 44, tft.width(), tft.height() - 44, ST77XX_BLACK);
 
-  tft.setTextColor(0xd6bf);
+  u8g2Fonts.setFont(SMALL_FONT);
+  u8g2Fonts.setForegroundColor(0xb01f);
+  u8g2Fonts.setCursor(0, 52);
+  u8g2Fonts.print("msg:");
+  flashLED(255, 0, 255);
+  u8g2Fonts.setFont(LARGE_FONT);
+
+  u8g2Fonts.setForegroundColor(0xd6bf);
   int start = 0;
+  int lineY = 68;                    // начало сообщений
   while (start < msg.length()) {
-    int end = start + 26;
+    int end = start + 16;            // подогнано под ширину шрифта 10x20
     if (end > msg.length()) end = msg.length();
-    tft.println(msg.substring(start, end));
+    
+    u8g2Fonts.setCursor(0, lineY);
+    u8g2Fonts.print(msg.substring(start, end));
+    
+    lineY += 16;                     // межстрочный отступ
     start = end;
   }
 }
+
 
 // ==================== WebSocket ====================
 void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
@@ -368,19 +389,19 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
     case WStype_DISCONNECTED:
       Serial.println("❌ WebSocket отключён");
       tft.fillScreen(ST77XX_BLACK);
-      tft.setCursor(0, 0);
-      tft.setTextColor(ST77XX_RED);
-      tft.setTextSize(2);
-      tft.println("WebSocket off");
+      u8g2Fonts.setFont(LARGE_FONT);
+      u8g2Fonts.setForegroundColor(ST77XX_RED);
+      u8g2Fonts.setCursor(10, 70);
+      u8g2Fonts.print("WebSocket off");
       break;
 
     case WStype_CONNECTED:
       Serial.println("✅ WebSocket подключён!");
       tft.fillScreen(ST77XX_BLACK);
-      tft.setCursor(0, 0);
-      tft.setTextColor(ST77XX_GREEN);
-      tft.setTextSize(2);
-      tft.println("WebSocket connected");
+      u8g2Fonts.setFont(LARGE_FONT);
+      u8g2Fonts.setForegroundColor(ST77XX_GREEN);
+      u8g2Fonts.setCursor(10, 60);
+      u8g2Fonts.print("WebSocket connected");
       break;
 
     case WStype_TEXT: {
@@ -388,14 +409,9 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
       Serial.print("📨 Получено: ");
       Serial.println(message);
       
-
-      // === ЗАПУСК СЕРДЕЧЕК, если в сообщении есть <3 ===
       if (message.indexOf("<3") != -1) {
-        // запускаем сразу 3–5 сердечек для красивого эффекта
-        for (int i = 0; i < 1; i++) {
-          spawnParticle();
-        }
-      }else{
+        spawnParticle();
+      } else {
         showMessageOnScreen(message);
       }
       break;
@@ -427,6 +443,7 @@ void setup() {
 
   // Инициализация экрана
   tft.initR(INITR_BLACKTAB);
+  u8g2Fonts.begin(tft);   // ← обязательно!
   tft.setRotation(1);
   tft.fillScreen(ST77XX_BLACK);
   tft.setTextSize(2);
