@@ -24,6 +24,9 @@ const uint8_t* SMALL_FONT = u8g2_font_6x13_t_cyrillic;   // для описан�
 #define ENC_B     26
 #define ENC_BTN   27
 
+// Пассивный зумер
+#define BUZZER_PIN 32
+
 // ==================== RGB СВЕТОДИОД ====================
 #define LED_R 12
 #define LED_G 13
@@ -54,6 +57,59 @@ static inline void updateLEDFlash() {
 void flashLED(uint8_t r, uint8_t g, uint8_t b, int duration = 60) {
   setLED(r, g, b);
   ledOffAtMs = millis() + (unsigned long)duration;
+}
+
+// ==================== ПАССИВНЫЙ ЗУМЕР (НЕБЛОКИРУЮЩИЙ) ====================
+
+// Ноты
+#define NOTE_C5  523
+#define NOTE_E5  659
+#define NOTE_G4  392
+#define NOTE_G5  784
+
+struct MelodyNote {
+  uint16_t freq;
+  uint16_t duration;
+};
+
+// Красивая мелодия уведомления — восходящий арпеджио с разрешением
+const MelodyNote notifyMelody[] PROGMEM = {
+  {NOTE_E5,  100/2},
+  {NOTE_G5,  140/2},
+  {NOTE_E5,  130/2},
+  {NOTE_C5,  180/2},
+  {NOTE_G4,  180/2}    // красиво затихает внизу
+};
+
+const int notifyMelodyLen = sizeof(notifyMelody) / sizeof(notifyMelody[0]);
+
+int8_t  buzzerNoteIdx   = -1;   // -1 = не играем
+unsigned long buzzerNoteStart = 0;
+
+void startNotifySound() {
+  if (buzzerNoteIdx >= 0) return;  // уже играет — не перезапускаем
+  buzzerNoteIdx = 0;
+  buzzerNoteStart = millis();
+  uint16_t f = pgm_read_word(&notifyMelody[0].freq);
+  if (f) tone(BUZZER_PIN, f);
+}
+
+void updateNotifySound() {
+  if (buzzerNoteIdx < 0) return;
+  unsigned long now = millis();
+  uint16_t dur = pgm_read_word(&notifyMelody[buzzerNoteIdx].duration);
+  if (now - buzzerNoteStart >= dur) {
+    buzzerNoteIdx++;
+    if (buzzerNoteIdx >= notifyMelodyLen) {
+      noTone(BUZZER_PIN);
+      buzzerNoteIdx = -1;
+    } else {
+      buzzerNoteStart = now;
+      uint16_t f = pgm_read_word(&notifyMelody[buzzerNoteIdx].freq);
+      if (f) tone(BUZZER_PIN, f);
+      else   noTone(BUZZER_PIN);
+    }
+  }
 }
 
 // ==================== WiFi и WebSocket ====================
@@ -342,12 +398,12 @@ void displayDateTimeWeather() {
 
   // === Дата и время ===
   u8g2Fonts.setFont(LARGE_FONT);
-  u8g2Fonts.setForegroundColor(0xfedd);
+  u8g2Fonts.setForegroundColor(0x8c9f);// 0xfedd
   u8g2Fonts.setCursor(0, 16);
   u8g2Fonts.print(timeStr);
   
   // === Температура ===
-  u8g2Fonts.setForegroundColor(0xa45f);
+  u8g2Fonts.setForegroundColor(0x005f);// 0xa45f
   u8g2Fonts.setCursor(0, 32);
   u8g2Fonts.print(tempBuf);
 
@@ -358,16 +414,16 @@ void displayDateTimeWeather() {
 
 // ==================== ВЫВОД СООБЩЕНИЯ НА ЭКРАН ====================
 void showMessageOnScreen(const String &msg) {
-  tft.fillRect(0, 44, tft.width(), tft.height() - 44, ST77XX_BLACK);
+  tft.fillRect(0, 44, tft.width(), tft.height() - 44, ST77XX_BLACK );
 
   u8g2Fonts.setFont(SMALL_FONT);
-  u8g2Fonts.setForegroundColor(0xb01f);
+  u8g2Fonts.setForegroundColor(0xfd2d);// 0xb01f
   u8g2Fonts.setCursor(0, 52);
   u8g2Fonts.print("msg:");
   flashLED(255, 0, 255);
   u8g2Fonts.setFont(LARGE_FONT);
 
-  u8g2Fonts.setForegroundColor(0xd6bf);
+  u8g2Fonts.setForegroundColor(0xff5a);// 0xd6bf
   int start = 0;
   int lineY = 68;                    // начало сообщений
   while (start < msg.length()) {
@@ -388,20 +444,21 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
   switch(type) {
     case WStype_DISCONNECTED:
       Serial.println("❌ WebSocket отключён");
-      tft.fillScreen(ST77XX_BLACK);
+      u8g2Fonts.setFont(SMALL_FONT);
+      u8g2Fonts.setForegroundColor(0xf800);// 0xb01f
+      u8g2Fonts.setCursor(10, 60);
       u8g2Fonts.setFont(LARGE_FONT);
-      u8g2Fonts.setForegroundColor(ST77XX_RED);
-      u8g2Fonts.setCursor(10, 70);
       u8g2Fonts.print("WebSocket off");
       break;
 
     case WStype_CONNECTED:
       Serial.println("✅ WebSocket подключён!");
       tft.fillScreen(ST77XX_BLACK);
-      u8g2Fonts.setFont(LARGE_FONT);
-      u8g2Fonts.setForegroundColor(ST77XX_GREEN);
+      u8g2Fonts.setFont(SMALL_FONT);
+      u8g2Fonts.setForegroundColor(0xf800);// 0xb01f
       u8g2Fonts.setCursor(10, 60);
-      u8g2Fonts.print("WebSocket connected");
+      u8g2Fonts.setFont(LARGE_FONT);
+      u8g2Fonts.print("WebSocket Connected");
       break;
 
     case WStype_TEXT: {
@@ -409,6 +466,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
       Serial.print("📨 Получено: ");
       Serial.println(message);
       
+      startNotifySound();
       if (message.indexOf("<3") != -1) {
         spawnParticle();
       } else {
@@ -430,6 +488,9 @@ void resetWiFi() {
 void setup() {
   Serial.begin(115200);
   delay(1000);
+
+  Serial.println("🔋 Мониторинг батареи инициализирован");
+
   pinMode(resetButton, INPUT_PULLUP);
   pinMode(ENC_BTN, INPUT_PULLUP);
 
@@ -439,12 +500,16 @@ void setup() {
   pinMode(LED_B, OUTPUT);
   setLED(0, 0, 0);
 
+  // Инициализация зумера
+  pinMode(BUZZER_PIN, OUTPUT);
+  noTone(BUZZER_PIN);
+
   Serial.println("\n=== ESP32 + WebSocket + Сердечки ===");
 
   // Инициализация экрана
   tft.initR(INITR_BLACKTAB);
   u8g2Fonts.begin(tft);   // ← обязательно!
-  tft.setRotation(1);
+  tft.setRotation(3);
   tft.fillScreen(ST77XX_BLACK);
   tft.setTextSize(2);
   tft.setTextColor(ST77XX_WHITE);
@@ -495,6 +560,7 @@ void loop() {
   webSocket.loop();
 
   updateLEDFlash();
+  updateNotifySound();
 
   // Обновление и отрисовка сердечек
   updateParticles();
