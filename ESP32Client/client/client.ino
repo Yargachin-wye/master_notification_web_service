@@ -493,6 +493,12 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
       startNotifySound();
       if (message.indexOf("<3") != -1) {
         spawnParticle();
+      } else if (message.indexOf("connected") != -1) {
+        tft.fillRect(0, 44, tft.width(), tft.height() - 44, ST77XX_BLACK );
+        u8g2Fonts.setFont(SMALL_FONT);
+        u8g2Fonts.setForegroundColor(0xfd2d);
+        u8g2Fonts.setCursor(0, 68);
+        u8g2Fonts.print("connected");
       } else {
         showMessageOnScreen(message);
       }
