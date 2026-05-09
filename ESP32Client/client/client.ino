@@ -27,6 +27,9 @@ const uint8_t* SMALL_FONT = u8g2_font_6x13_t_cyrillic;   // для описан�
 // Пассивный зумер
 #define BUZZER_PIN 32
 
+// ==================== БАТАРЕЯ ====================
+#define BAT_PIN 34
+
 // ==================== RGB СВЕТОДИОД ====================
 #define LED_R 12
 #define LED_G 13
@@ -371,6 +374,15 @@ void drawParticles() {
 
 const char* shortDay[7] = {"вс", "пн", "вт", "ср", "чт", "пт", "сб"};
 
+// ==================== БАТАРЕЯ ====================
+int readBatteryPercent() {
+  int raw = analogRead(BAT_PIN);
+  float v = (raw / 4095.0) * 3.3;
+  float batteryVoltage = v * 2.0;
+  int percent = map(batteryVoltage * 100, 300, 420, 0, 100);
+  return constrain(percent, 0, 100);
+}
+
 // ==================== ВЫВОД ДАТЫ/ВРЕМЕНИ И ПОГОДЫ НА ЭКРАН ====================
 void displayDateTimeWeather() {
   struct tm timeinfo;
@@ -410,6 +422,18 @@ void displayDateTimeWeather() {
   // === Описание погоды ===
   u8g2Fonts.setCursor(0, 44);
   u8g2Fonts.print(currentWeather.description);
+
+  // === Батарея (правый верхний угол) ===
+  int batPercent = readBatteryPercent();
+  char batBuf[8];
+  snprintf(batBuf, sizeof(batBuf), "%d%%", batPercent);
+  u8g2Fonts.setFont(SMALL_FONT);
+  if (batPercent > 40)      u8g2Fonts.setForegroundColor(0x07e0); // зелёный
+  else if (batPercent > 20) u8g2Fonts.setForegroundColor(0xffe0); // жёлтый
+  else                       u8g2Fonts.setForegroundColor(0xf800); // красный
+  int batW = u8g2Fonts.getUTF8Width(batBuf);
+  u8g2Fonts.setCursor(tft.width() - batW - 2, 52);
+  u8g2Fonts.print(batBuf);
 }
 
 // ==================== ВЫВОД СООБЩЕНИЯ НА ЭКРАН ====================
@@ -488,8 +512,8 @@ void resetWiFi() {
 void setup() {
   Serial.begin(115200);
   delay(1000);
-
-  Serial.println("🔋 Мониторинг батареи инициализирован");
+  
+  analogReadResolution(12);
 
   pinMode(resetButton, INPUT_PULLUP);
   pinMode(ENC_BTN, INPUT_PULLUP);
