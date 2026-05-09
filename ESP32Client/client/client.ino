@@ -89,12 +89,27 @@ const int notifyMelodyLen = sizeof(notifyMelody) / sizeof(notifyMelody[0]);
 int8_t  buzzerNoteIdx   = -1;   // -1 = не играем
 unsigned long buzzerNoteStart = 0;
 
+// ==================== ГРОМКОСТЬ ====================
+int notifyVolume = 5; // 0..10
+volatile int encoderDelta = 0;
+unsigned long volumeDisplayUntil = 0;
+
+void setBuzzerTone(uint16_t freq) {
+  if (freq == 0) {
+    ledcWrite(BUZZER_PIN, 0);
+  } else {
+    ledcChangeFrequency(BUZZER_PIN, freq, 10);
+    int duty = map(notifyVolume, 0, 10, 0, 512);
+    ledcWrite(BUZZER_PIN, duty);
+  }
+}
+
 void startNotifySound() {
   if (buzzerNoteIdx >= 0) return;  // уже играет — не перезапускаем
   buzzerNoteIdx = 0;
   buzzerNoteStart = millis();
   uint16_t f = pgm_read_word(&notifyMelody[0].freq);
-  if (f) tone(BUZZER_PIN, f);
+  if (f) setBuzzerTone(f);
 }
 
 void updateNotifySound() {
@@ -104,15 +119,23 @@ void updateNotifySound() {
   if (now - buzzerNoteStart >= dur) {
     buzzerNoteIdx++;
     if (buzzerNoteIdx >= notifyMelodyLen) {
-      noTone(BUZZER_PIN);
+      setBuzzerTone(0);
       buzzerNoteIdx = -1;
     } else {
       buzzerNoteStart = now;
       uint16_t f = pgm_read_word(&notifyMelody[buzzerNoteIdx].freq);
-      if (f) tone(BUZZER_PIN, f);
-      else   noTone(BUZZER_PIN);
+      if (f) setBuzzerTone(f);
+      else   setBuzzerTone(0);
     }
   }
+}
+
+// ==================== ЭНКОДЕР (прерывание) ====================
+void IRAM_ATTR onEncoderA() {
+  int a = digitalRead(ENC_A);
+  int b = digitalRead(ENC_B);
+  if (b != a) encoderDelta++;
+  else        encoderDelta--;
 }
 
 // ==================== WiFi и WebSocket ====================
@@ -410,12 +433,12 @@ void displayDateTimeWeather() {
 
   // === Дата и время ===
   u8g2Fonts.setFont(LARGE_FONT);
-  u8g2Fonts.setForegroundColor(0x8c9f);// 0xfedd
+  u8g2Fonts.setForegroundColor(0x8c9f);// бледно-синий
   u8g2Fonts.setCursor(0, 16);
   u8g2Fonts.print(timeStr);
   
   // === Температура ===
-  u8g2Fonts.setForegroundColor(0x005f);// 0xa45f
+  u8g2Fonts.setForegroundColor(0x005f);// синий
   u8g2Fonts.setCursor(0, 32);
   u8g2Fonts.print(tempBuf);
 
@@ -428,8 +451,8 @@ void displayDateTimeWeather() {
   char batBuf[8];
   snprintf(batBuf, sizeof(batBuf), "%d%%", batPercent);
   u8g2Fonts.setFont(SMALL_FONT);
-  if (batPercent > 40)      u8g2Fonts.setForegroundColor(0x07e0); // зелёный
-  else if (batPercent > 20) u8g2Fonts.setForegroundColor(0xffe0); // жёлтый
+  if (batPercent > 40)      u8g2Fonts.setForegroundColor(0x56fc); // зелёный
+  else if (batPercent > 20) u8g2Fonts.setForegroundColor(0xfb20); // оранжевый
   else                       u8g2Fonts.setForegroundColor(0xf800); // красный
   int batW = u8g2Fonts.getUTF8Width(batBuf);
   u8g2Fonts.setCursor(tft.width() - batW - 2, 52);
@@ -441,7 +464,7 @@ void showMessageOnScreen(const String &msg) {
   tft.fillRect(0, 44, tft.width(), tft.height() - 44, ST77XX_BLACK );
 
   u8g2Fonts.setFont(SMALL_FONT);
-  u8g2Fonts.setForegroundColor(0xfd2d);// 0xb01f
+  u8g2Fonts.setForegroundColor(0xfd2d);// персековый
   u8g2Fonts.setCursor(0, 52);
   u8g2Fonts.print("msg:");
   flashLED(255, 0, 255);
@@ -489,9 +512,8 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
       String message = String((char*)payload).substring(0, length);
       Serial.print("📨 Получено: ");
       Serial.println(message);
-      
-      startNotifySound();
       if (message.indexOf("<3") != -1) {
+        startNotifySound();
         spawnParticle();
       } else if (message.indexOf("connected") != -1) {
         tft.fillRect(0, 44, tft.width(), tft.height() - 44, ST77XX_BLACK );
@@ -500,6 +522,7 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
         u8g2Fonts.setCursor(0, 68);
         u8g2Fonts.print("connected");
       } else {
+        startNotifySound();
         showMessageOnScreen(message);
       }
       break;
@@ -530,9 +553,14 @@ void setup() {
   pinMode(LED_B, OUTPUT);
   setLED(0, 0, 0);
 
-  // Инициализация зумера
-  pinMode(BUZZER_PIN, OUTPUT);
-  noTone(BUZZER_PIN);
+  // Инициализация зумера (PWM для регулировки громкости)
+  ledcAttach(BUZZER_PIN, 2000, 10);
+  ledcWrite(BUZZER_PIN, 0);
+
+  // Инициализация энкодера
+  pinMode(ENC_A, INPUT_PULLUP);
+  pinMode(ENC_B, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(ENC_A), onEncoderA, CHANGE);
 
   Serial.println("\n=== ESP32 + WebSocket + Сердечки ===");
 
@@ -609,6 +637,23 @@ void loop() {
     if (digitalRead(resetButton) == LOW) resetWiFi();
   }
 
+  // Обработка поворота энкодера (громкость)
+  if (encoderDelta != 0) {
+    noInterrupts();
+    int delta = encoderDelta;
+    encoderDelta = 0;
+    interrupts();
+    notifyVolume += delta;
+    notifyVolume = constrain(notifyVolume, 0, 10);
+    Serial.printf("Громкость: %d/10\n", notifyVolume);
+    volumeDisplayUntil = millis() + 1000;
+    // Обновляем duty если звук играет прямо сейчас
+    if (buzzerNoteIdx >= 0) {
+      uint16_t f = pgm_read_word(&notifyMelody[buzzerNoteIdx].freq);
+      setBuzzerTone(f);
+    }
+  }
+
   // Кнопка энкодера - обновление времени и погоды
   if (digitalRead(ENC_BTN) == LOW) {
     delay(50); // антидребезг
@@ -617,6 +662,7 @@ void loop() {
       displayDateTimeWeather();
       lastTimeWeatherUpdate = millis();
       // Ждем отпускания кнопки
+      startNotifySound();
       while (digitalRead(ENC_BTN) == LOW) delay(10);
     }
   }
