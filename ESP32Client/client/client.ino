@@ -567,7 +567,7 @@ void setup() {
   // Инициализация экрана
   tft.initR(INITR_BLACKTAB);
   u8g2Fonts.begin(tft);   // ← обязательно!
-  tft.setRotation(3);
+  tft.setRotation(1);
   tft.fillScreen(ST77XX_BLACK);
   tft.setTextSize(2);
   tft.setTextColor(ST77XX_WHITE);
